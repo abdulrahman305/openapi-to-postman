@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [v4.21.0] - 2024-05-17
+
+### Added
+
+-   Added support for simplified request and response body matching in case of multiple examples.
+
+## [v4.20.1] - 2024-03-27
+
+### Fixed
+
+-   Fixed an issue where schemas under allOf keyword having additionalProperties set to false were not generating bodies correctly.
+
+## [v4.20.0] - 2024-02-15
+
+### Added
+
+-   Added support for reporting UserErrors in case when OpenAPI definition to converted is invalid.
+
+## [v4.19.0] - 2024-01-18
+
+## [v4.18.0] - 2023-09-28
+
+-   [#425](https://github.com/postmanlabs/openapi-to-postman/issues/425) [8413](https://github.com/postmanlabs/postman-app-support/issues/8413) Added support for multiple request and response examples.
+
 ## [v4.17.0] - 2023-09-12
 
 ## [v4.16.0] - 2023-08-18
@@ -596,7 +620,17 @@ Newer releases follow the [Keep a Changelog](https://keepachangelog.com/en/1.0.0
 
 -   Base release
 
-[Unreleased]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.17.0...HEAD
+[Unreleased]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.21.0...HEAD
+
+[v4.21.0]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.20.1...v4.21.0
+
+[v4.20.1]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.20.0...v4.20.1
+
+[v4.20.0]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.19.0...v4.20.0
+
+[v4.19.0]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.18.0...v4.19.0
+
+[v4.18.0]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.17.0...v4.18.0
 
 [v4.17.0]: https://github.com/postmanlabs/openapi-to-postman/compare/v4.16.0...v4.17.0
 

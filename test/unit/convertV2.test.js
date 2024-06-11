@@ -94,7 +94,19 @@ const expect = require('chai').expect,
   recursiveRefComponents =
     path.join(__dirname, VALID_OPENAPI_PATH, '/recursiveRefComponents.yaml'),
   securityAuthUnresolvedInPathItem =
-    path.join(__dirname, VALID_OPENAPI_PATH, '/securityAuthUnresolvedInPathItem.yaml');
+    path.join(__dirname, VALID_OPENAPI_PATH, '/securityAuthUnresolvedInPathItem.yaml'),
+  multiExampleRequest =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiExampleRequest.yaml'),
+  multiExampleResponse =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiExampleResponse.yaml'),
+  multiExampleRequestResponse =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiExampleRequestResponse.yaml'),
+  multiExampleMatchingRequestResponse =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiExampleMatchingRequestResponse.yaml'),
+  multiContentTypesMultiExample =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiContentTypesMultiExample.json'),
+  multiExampleRequestVariousResponse =
+    path.join(__dirname, VALID_OPENAPI_PATH, '/multiExampleRequestVariousResponse.yaml');
 
 
 describe('The convert v2 Function', function() {
@@ -939,19 +951,19 @@ describe('The convert v2 Function', function() {
     });
   });
 
-  it('should not return undefined in the error message if spec is not valid JSON/YAML', function(done) {
+  it('should return correct error message if spec is not valid JSON/YAML', function(done) {
     // invalid JSON
-    Converter.convertV2({ type: 'string', data: '{"key": { "value" : } ' }, {}, (err, conversionResult) => {
-      expect(err).to.be.null;
-      expect(conversionResult.result).to.be.false;
-      expect(conversionResult.reason).to.not.include('undefined');
+    Converter.convertV2({ type: 'string', data: '{"key": { "value" : } ' }, {}, (err) => {
+      expect(err).to.not.be.null;
+      expect(err.name).to.eql('UserError');
+      expect(err.message).to.include('Invalid format. Input must be in YAML or JSON format.');
     });
 
     // invalid YAML
-    Converter.convertV2({ type: 'string', data: ' :' }, {}, (err, conversionResult) => {
-      expect(err).to.be.null;
-      expect(conversionResult.result).to.be.false;
-      expect(conversionResult.reason).to.not.include('undefined');
+    Converter.convertV2({ type: 'string', data: ' :' }, {}, (err) => {
+      expect(err).to.not.be.null;
+      expect(err.name).to.eql('UserError');
+      expect(err.message).to.include('Invalid format. Input must be in YAML or JSON format.');
       done();
     });
   });
@@ -959,10 +971,10 @@ describe('The convert v2 Function', function() {
   it('should throw an invalid format error and not semantic version missing error when yaml.safeLoad ' +
   'does not throw an error while parsing yaml', function(done) {
     // YAML for which yaml.safeLoad does not throw an error
-    Converter.convertV2({ type: 'string', data: 'no error yaml' }, {}, (err, conversionResult) => {
-      expect(err).to.be.null;
-      expect(conversionResult.result).to.be.false;
-      expect(conversionResult.reason).to.not.include('Specification must contain a semantic version number' +
+    Converter.convertV2({ type: 'string', data: 'no error yaml' }, {}, (err) => {
+      expect(err).to.not.be.null;
+      expect(err.name).to.eql('UserError');
+      expect(err.message).to.not.include('Specification must contain a semantic version number' +
       ' of the OAS specification');
       done();
     });
@@ -1236,10 +1248,10 @@ describe('The convert v2 Function', function() {
   it('The converter must throw an error for invalid null info', function (done) {
     var openapi = fs.readFileSync(invalidNullInfo, 'utf8');
     Converter.convertV2({ type: 'string', data: openapi },
-      {}, (err, conversionResult) => {
-        expect(err).to.be.null;
-        expect(conversionResult.result).to.equal(false);
-        expect(conversionResult.reason)
+      {}, (err) => {
+        expect(err).to.not.be.null;
+        expect(err.name).to.eql('UserError');
+        expect(err.message)
           .to.equal('Specification must contain an Info Object for the meta-data of the API');
         done();
       });
@@ -1248,10 +1260,10 @@ describe('The convert v2 Function', function() {
   it('The converter must throw an error for invalid null info title', function (done) {
     var openapi = fs.readFileSync(invalidNullInfoTitle, 'utf8');
     Converter.convertV2({ type: 'string', data: openapi },
-      {}, (err, conversionResult) => {
-        expect(err).to.be.null;
-        expect(conversionResult.result).to.equal(false);
-        expect(conversionResult.reason)
+      {}, (err) => {
+        expect(err).to.not.be.null;
+        expect(err.name).to.eql('UserError');
+        expect(err.message)
           .to.equal('Specification must contain a title in order to generate a collection');
         done();
       });
@@ -1260,10 +1272,10 @@ describe('The convert v2 Function', function() {
   it('The converter must throw an error for invalid null info version', function (done) {
     var openapi = fs.readFileSync(invalidNullInfoVersion, 'utf8');
     Converter.convertV2({ type: 'string', data: openapi },
-      {}, (err, conversionResult) => {
-        expect(err).to.be.null;
-        expect(conversionResult.result).to.equal(false);
-        expect(conversionResult.reason)
+      {}, (err) => {
+        expect(err).to.not.be.null;
+        expect(err.name).to.eql('UserError');
+        expect(err.message)
           .to.equal('Specification must contain a semantic version number of the API in the Info Object');
         done();
       });
@@ -2061,6 +2073,50 @@ describe('The convert v2 Function', function() {
       });
     });
 
+    it('[GITHUB #417] - should convert file with enum as conflicts while merging allOf keyword', function() {
+      const fileSource = path.join(__dirname, VALID_OPENAPI_PATH, 'enumAllOfConflicts.yaml'),
+        fileData = fs.readFileSync(fileSource, 'utf8'),
+        input = {
+          type: 'string',
+          data: fileData
+        };
+
+      Converter.convertV2(input, {
+        optimizeConversion: false
+      }, (err, result) => {
+        const expectedResponseBody = JSON.parse(result.output[0].data.item[0].item[0].response[0].body);
+        expect(err).to.be.null;
+        expect(result.result).to.be.true;
+        expect(expectedResponseBody).to.be.an('object');
+        expect(expectedResponseBody).to.have.property('status');
+        expect(expectedResponseBody.status).to.be.a('string');
+        expect(expectedResponseBody.status).to.be.oneOf(['no_market', 'too_small', 'too_large',
+          'incomplete', 'completed', 'refunded']);
+      });
+    });
+
+    it('[GITHUB #417] - should convert file with allOf schemas containing additionalProperties as false ', function() {
+      const fileSource = path.join(__dirname, VALID_OPENAPI_PATH, 'allOfAdditionalProperties.json'),
+        fileData = fs.readFileSync(fileSource, 'utf8'),
+        input = {
+          type: 'string',
+          data: fileData
+        };
+
+      Converter.convertV2(input, {
+        optimizeConversion: false
+      }, (err, result) => {
+        const expectedRequestBody = JSON.parse(result.output[0].data.item[0].item[0].item[0].request.body.raw);
+
+        expect(err).to.be.null;
+        expect(result.result).to.be.true;
+
+        expect(expectedRequestBody).to.be.an('object');
+        expect(expectedRequestBody).to.have.keys(['phoneNumber', 'zipCode', 'countryCode', 'state', 'city',
+          'address1', 'lastName', 'firstName', 'email', 'campaignId']);
+      });
+    });
+
     it('Should convert a swagger document with XML example correctly', function(done) {
       const fileData = fs.readFileSync(path.join(__dirname, SWAGGER_20_FOLDER_YAML, 'xml_example.yaml'), 'utf8'),
         input = {
@@ -2416,6 +2472,260 @@ describe('The convert v2 Function', function() {
       expect(result.output[0].data.info.name).to.eql('Imported from OpenAPI');
       expect(result.output[0].data).to.have.property('item');
       done();
+    });
+  });
+
+  describe('Should generate multiple examples when', function() {
+    it('request body contains multiple examples but request body has single example', function(done) {
+      var openapi = fs.readFileSync(multiExampleRequest, 'utf8');
+      Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+        (err, conversionResult) => {
+          expect(err).to.be.null;
+          expect(conversionResult.result).to.equal(true);
+          expect(conversionResult.output.length).to.equal(1);
+          expect(conversionResult.output[0].type).to.equal('collection');
+          expect(conversionResult.output[0].data).to.have.property('info');
+          expect(conversionResult.output[0].data).to.have.property('item');
+          expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+          const item = conversionResult.output[0].data.item[0].item[0];
+
+          expect(JSON.parse(item.request.body.raw)).to.eql({
+            user: 1,
+            height: 168,
+            weight: 44
+          });
+          expect(item.response).to.have.lengthOf(2);
+          expect(item.response[0].name).to.eql('valid-request');
+          expect(item.response[0]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[0].body)).to.eql({ hello: 'world' });
+          expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql({
+            user: 1,
+            height: 168,
+            weight: 44
+          });
+
+          expect(item.response[1].name).to.eql('missing-required-parameter');
+          expect(item.response[1]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[1].body)).to.eql({ hello: 'world' });
+          expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql({
+            user: 1
+          });
+          done();
+        });
+    });
+
+    it('response body contains multiple examples but response body has single example', function(done) {
+      var openapi = fs.readFileSync(multiExampleResponse, 'utf8');
+      Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+        (err, conversionResult) => {
+          expect(err).to.be.null;
+          expect(conversionResult.result).to.equal(true);
+          expect(conversionResult.output.length).to.equal(1);
+          expect(conversionResult.output[0].type).to.equal('collection');
+          expect(conversionResult.output[0].data).to.have.property('info');
+          expect(conversionResult.output[0].data).to.have.property('item');
+          expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+          const item = conversionResult.output[0].data.item[0].item[0];
+
+          expect(JSON.parse(item.request.body.raw)).to.eql({ hello: 'world' });
+          expect(item.response).to.have.lengthOf(2);
+          expect(item.response[0].name).to.eql('valid-request');
+          expect(item.response[0]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[0].body)).to.eql({
+            user: 1,
+            height: 168,
+            weight: 44
+          });
+          expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql({ hello: 'world' });
+
+          expect(item.response[1].name).to.eql('missing-required-parameter');
+          expect(item.response[1]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[1].body)).to.eql({ user: 1 });
+          expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql({ hello: 'world' });
+          done();
+        });
+    });
+
+    it('both request and response body contains multiple examples with matching keys and ignore non matching keys',
+      function(done) {
+        const openapi = fs.readFileSync(multiExampleMatchingRequestResponse, 'utf8');
+        Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+          (err, conversionResult) => {
+            expect(err).to.be.null;
+            expect(conversionResult.result).to.equal(true);
+            expect(conversionResult.output.length).to.equal(1);
+            expect(conversionResult.output[0].type).to.equal('collection');
+            expect(conversionResult.output[0].data).to.have.property('info');
+            expect(conversionResult.output[0].data).to.have.property('item');
+            expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+            const item = conversionResult.output[0].data.item[0].item[0];
+
+            expect(JSON.parse(item.request.body.raw)).to.eql({
+              includedFields: ['user', 'height', 'weight']
+            });
+
+            /**
+             * Even though both req and res has 3 examples, only 2 example should be present
+             * as only 2 examples have matching keys
+             */
+            expect(item.response).to.have.lengthOf(2);
+            expect(item.response[0].name).to.eql('Complete request');
+            expect(item.response[0]._postman_previewlanguage).to.eql('json');
+            expect(JSON.parse(item.response[0].body)).to.eql({
+              user: 1,
+              height: 168,
+              weight: 44
+            });
+            expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql({
+              includedFields: ['user', 'height', 'weight']
+            });
+
+            expect(item.response[1].name).to.eql('Request with only required params');
+            expect(item.response[1]._postman_previewlanguage).to.eql('json');
+            expect(JSON.parse(item.response[1].body)).to.eql({ user: 1 });
+            expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql({
+              includedFields: ['user']
+            });
+            done();
+          });
+      });
+
+    it('both request and response body contains multiple examples in mentioned order when no matching keys',
+      function(done) {
+        var openapi = fs.readFileSync(multiExampleRequestResponse, 'utf8');
+        Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+          (err, conversionResult) => {
+            expect(err).to.be.null;
+            expect(conversionResult.result).to.equal(true);
+            expect(conversionResult.output.length).to.equal(1);
+            expect(conversionResult.output[0].type).to.equal('collection');
+            expect(conversionResult.output[0].data).to.have.property('info');
+            expect(conversionResult.output[0].data).to.have.property('item');
+            expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+            const item = conversionResult.output[0].data.item[0].item[0];
+
+            expect(JSON.parse(item.request.body.raw)).to.eql({
+              includedFields: ['user', 'height', 'weight']
+            });
+            expect(item.response).to.have.lengthOf(2);
+            expect(item.response[0].name).to.eql('Request with only required params');
+            expect(item.response[0]._postman_previewlanguage).to.eql('json');
+            expect(JSON.parse(item.response[0].body)).to.eql({
+              user: 1
+            });
+            expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql({
+              includedFields: ['user', 'height', 'weight']
+            });
+
+            expect(item.response[1].name).to.eql('Complete request');
+            expect(item.response[1]._postman_previewlanguage).to.eql('json');
+            expect(JSON.parse(item.response[1].body)).to.eql({
+              user: 1,
+              height: 168,
+              weight: 44
+            });
+            expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql({
+              includedFields: ['user']
+            });
+            done();
+          });
+      });
+
+    it('request body and responses contain multiple content types and multiple examples', function(done) {
+      const openapi = fs.readFileSync(multiContentTypesMultiExample, 'utf8');
+      Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+        (err, conversionResult) => {
+          expect(err).to.be.null;
+          expect(conversionResult.result).to.equal(true);
+          expect(conversionResult.output.length).to.equal(1);
+          expect(conversionResult.output[0].type).to.equal('collection');
+          expect(conversionResult.output[0].data).to.have.property('info');
+          expect(conversionResult.output[0].data).to.have.property('item');
+          expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+          const item = conversionResult.output[0].data.item[0].item[0],
+            okReqExample = { message: 'ok' },
+            failReqExample = { message: 'fail' },
+            okResExample = { message: 'Found', code: 200123 },
+            failResExample = { message: 'Not Found' };
+
+          expect(JSON.parse(item.request.body.raw)).to.eql(okReqExample);
+          expect(item.response).to.have.lengthOf(4);
+          expect(item.response[0].name).to.eql('ok_example');
+          expect(item.response[0].code).to.eql(200);
+          expect(item.response[0]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql(okReqExample);
+          expect(JSON.parse(item.response[0].body)).to.eql(okResExample);
+
+          expect(item.response[1].name).to.eql('not_ok_example');
+          expect(item.response[1].code).to.eql(200);
+          expect(item.response[1]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql(failReqExample);
+          expect(JSON.parse(item.response[1].body)).to.eql(okResExample);
+
+          expect(item.response[2].name).to.eql('ok_example');
+          expect(item.response[2].code).to.eql(500);
+          expect(item.response[2]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[2].originalRequest.body.raw)).to.eql(okReqExample);
+          expect(JSON.parse(item.response[2].body)).to.eql(failResExample);
+
+          expect(item.response[3].name).to.eql('not_ok_example');
+          expect(item.response[3].code).to.eql(500);
+          expect(item.response[3]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[3].originalRequest.body.raw)).to.eql(failReqExample);
+          expect(JSON.parse(item.response[3].body)).to.eql(failResExample);
+          done();
+        });
+    });
+
+    it('request body and responses contain multiple examples with various response code ' +
+      'having single or multiple examples', function(done) {
+      const openapi = fs.readFileSync(multiExampleRequestVariousResponse, 'utf8');
+      Converter.convertV2({ type: 'string', data: openapi }, { parametersResolution: 'Example' },
+        (err, conversionResult) => {
+          expect(err).to.be.null;
+          expect(conversionResult.result).to.equal(true);
+          expect(conversionResult.output.length).to.equal(1);
+          expect(conversionResult.output[0].type).to.equal('collection');
+          expect(conversionResult.output[0].data).to.have.property('info');
+          expect(conversionResult.output[0].data).to.have.property('item');
+          expect(conversionResult.output[0].data.item[0].item.length).to.equal(1);
+
+          const item = conversionResult.output[0].data.item[0].item[0],
+            reqBody1 = { includedFields: ['user', 'height', 'weight'] },
+            reqBody2 = { includedFields: ['eyeColor'] };
+
+          expect(JSON.parse(item.request.body.raw)).to.eql(reqBody1);
+          expect(item.response).to.have.lengthOf(4);
+          expect(item.response[0].name).to.eql('Request with only required params');
+          expect(item.response[0].code).to.eql(200);
+          expect(item.response[0]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[0].originalRequest.body.raw)).to.eql(reqBody1);
+          expect(JSON.parse(item.response[0].body)).to.eql({ user: 1 });
+
+          expect(item.response[1].name).to.eql('Request with only bad params');
+          expect(item.response[1].code).to.eql(400);
+          expect(item.response[1]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[1].originalRequest.body.raw)).to.eql(reqBody2);
+          expect(JSON.parse(item.response[1].body)).to.eql({ eyeColor: 'gray' });
+
+          expect(item.response[2].name).to.eql('Failed request - Negative user');
+          expect(item.response[2].code).to.eql(500);
+          expect(item.response[2]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[2].originalRequest.body.raw)).to.eql(reqBody1);
+          expect(JSON.parse(item.response[2].body)).to.eql({ user: -99 });
+
+          expect(item.response[3].name).to.eql('Failed request - All negatives');
+          expect(item.response[3].code).to.eql(500);
+          expect(item.response[3]._postman_previewlanguage).to.eql('json');
+          expect(JSON.parse(item.response[3].originalRequest.body.raw)).to.eql(reqBody2);
+          expect(JSON.parse(item.response[3].body)).to.eql({ user: -999, height: -168, weight: -44 });
+          done();
+        });
     });
   });
 });
