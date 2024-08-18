@@ -1,5 +1,7 @@
-const sdk = require('postman-collection'),
-  _ = require('lodash'),
+const _ = require('lodash'),
+  jsonPointer = require('json-pointer'),
+  { Item } = require('postman-collection/lib/collection/item'),
+  { Response } = require('postman-collection/lib/collection/response'),
 
   // This is the default collection name if one can't be inferred from the OpenAPI spec
   COLLECTION_NAME = 'Imported from OpenAPI',
@@ -30,7 +32,7 @@ const sdk = require('postman-collection'),
     response.code = response.code.replace(/X|x/g, '0');
     response.code = response.code === 'default' ? 500 : _.toSafeInteger(response.code);
 
-    let sdkResponse = new sdk.Response({
+    let sdkResponse = new Response({
       name: response.name,
       code: response.code,
       header: response.headers,
@@ -50,7 +52,7 @@ const sdk = require('postman-collection'),
     return sdkResponse;
   },
   generateRequestItemObject = (requestObject) => {
-    const requestItem = new sdk.Item(requestObject),
+    const requestItem = new Item(requestObject),
       queryParams = _.get(requestObject, 'request.params.queryParams'),
       pathParams = _.get(requestObject, 'request.params.pathParams', []),
       headers = _.get(requestObject, 'request.headers', []),
@@ -197,6 +199,48 @@ module.exports = {
     }
 
     return title;
+  },
+
+  /**
+   * Adds provided property array to the given JSON path
+   *
+   * @param {string} jsonPath - JSON path to which properties should be added
+   * @param {array} propArray - Array of properties to be added to JSON path
+   * @returns {string} - Combined JSON path
+   */
+  addToJsonPath: function (jsonPath, propArray) {
+    const jsonPathArray = jsonPointer.parse(jsonPath),
+      escapedPropArray = _.map(propArray, (prop) => {
+        return jsonPointer.escape(prop);
+      });
+
+    return jsonPointer.compile(jsonPathArray.concat(escapedPropArray));
+  },
+
+  /**
+   * Merges two JSON paths. i.e. Parent JSON path and Child JSON path
+   *
+   * @param {string} parentJsonPath - Parent JSON path
+   * @param {string} childJsonPath - Child JSON path
+   * @returns {string} - Merged JSON path
+   */
+  mergeJsonPath: function (parentJsonPath, childJsonPath) {
+    let jsonPathArray = jsonPointer.parse(parentJsonPath);
+
+    // Merges childJsonPath with parentJsonPath
+    jsonPathArray = jsonPathArray.concat(jsonPointer.parse(childJsonPath));
+
+    return jsonPointer.compile(jsonPathArray);
+  },
+
+  /**
+   * Gets JSON path in array from string JSON path
+   *
+   * @param {string} jsonPath - input JSON path
+   * @returns {array} - Parsed JSON path (each part is distributed in an array)
+   */
+  getJsonPathArray: function (jsonPath) {
+    return jsonPointer.parse(jsonPointer.unescape(jsonPath));
   },
 
   generatePmResponseObject,

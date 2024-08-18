@@ -2,7 +2,10 @@
 // TODO: REMOVE THIS ☝🏻
 
 const _ = require('lodash'),
-  sdk = require('postman-collection'),
+  { Header } = require('postman-collection/lib/collection/header'),
+  { QueryParam } = require('postman-collection/lib/collection/query-param'),
+  { Url } = require('postman-collection/lib/collection/url'),
+  { Variable } = require('postman-collection/lib/collection/variable'),
   async = require('async'),
   crypto = require('crypto'),
   schemaFaker = require('../assets/json-schema-faker.js'),
@@ -82,7 +85,8 @@ schemaFaker.option({
   maxItems: 20, // limit on maximum number of items faked for (type: array)
   useDefaultValue: true,
   ignoreMissingRefs: true,
-  avoidExampleItemsLength: true // option to avoid validating type array schema example's minItems and maxItems props.
+  avoidExampleItemsLength: true, // option to avoid validating type array schema example's minItems and maxItems props.
+  failOnInvalidFormat: false
 });
 
 /**
@@ -155,7 +159,10 @@ function safeSchemaFaker (context, oldSchema, resolveFor, parameterSourceOption,
    * i.e. For array it'll add maxItems = 2. This should be avoided as we'll again be needing non-mutated schema
    * in further VALIDATION use cases as needed.
    */
-  resolvedSchema = resolveSchema(context, _.cloneDeep(oldSchema), 0, _.toLower(PROCESSING_TYPE.CONVERSION));
+  resolvedSchema = resolveSchema(context, _.cloneDeep(oldSchema), {
+    resolveFor: _.toLower(PROCESSING_TYPE.CONVERSION),
+    isResponseSchema: parameterSourceOption === PARAMETER_SOURCE.RESPONSE
+  });
 
   resolvedSchema = concreteUtils.fixExamplesByVersion(resolvedSchema);
   key = JSON.stringify(resolvedSchema);
@@ -400,8 +407,10 @@ function getParameterDescription (parameter) {
  */
 function getParamSerialisationInfo (param, parameterSource, components, options) {
   var paramName = _.get(param, 'name'),
-    paramSchema = resolveSchema(getDefaultContext(options, components), _.cloneDeep(param.schema),
-      0, PROCESSING_TYPE.VALIDATION),
+    paramSchema = resolveSchema(getDefaultContext(options, components), _.cloneDeep(param.schema), {
+      resolveFor: PROCESSING_TYPE.VALIDATION,
+      isResponseSchema: parameterSource === PARAMETER_SOURCE.RESPONSE
+    }),
     style, // style property defined/inferred from schema
     explode, // explode property defined/inferred from schema
     propSeparator, // separates two properties or values
@@ -490,8 +499,10 @@ function getParamSerialisationInfo (param, parameterSource, components, options)
  */
 function deserialiseParamValue (param, paramValue, parameterSource, components, options) {
   var constructedValue,
-    paramSchema = resolveSchema(getDefaultContext(options, components), _.cloneDeep(param.schema),
-      0, PROCESSING_TYPE.VALIDATION),
+    paramSchema = resolveSchema(getDefaultContext(options, components), _.cloneDeep(param.schema), {
+      resolveFor: PROCESSING_TYPE.VALIDATION,
+      isResponseSchema: parameterSource === PARAMETER_SOURCE.RESPONSE
+    }),
     isEvenNumber = (num) => {
       return (num % 2 === 0);
     },
@@ -853,9 +864,9 @@ function checkContentTypeHeader (headers, transactionPathPrefix, schemaPathPrefi
  */
 function generateSdkParam (param, location) {
   const sdkElementMap = {
-    'query': sdk.QueryParam,
-    'header': sdk.Header,
-    'path': sdk.Variable
+    'query': QueryParam,
+    'header': Header,
+    'path': Variable
   };
 
   let generatedParam = {
@@ -1012,7 +1023,7 @@ function convertToPmCollectionVariables (serverVariables, keyName, serverUrl = '
   if (serverVariables) {
     _.forOwn(serverVariables, (value, key) => {
       let description = getParameterDescription(value);
-      variables.push(new sdk.Variable({
+      variables.push(new Variable({
         key: key,
         value: value.default || '',
         description: description
@@ -1020,7 +1031,7 @@ function convertToPmCollectionVariables (serverVariables, keyName, serverUrl = '
     });
   }
   if (keyName) {
-    variables.push(new sdk.Variable({
+    variables.push(new Variable({
       key: keyName,
       value: serverUrl,
       type: 'string'
@@ -1331,7 +1342,10 @@ function checkValueAgainstSchema (context, property, jsonPathPrefix, txnParamNam
     invalidJson = false,
     valueToUse = value,
 
-    schema = resolveSchema(context, openApiSchemaObj, 0, PROCESSING_TYPE.VALIDATION),
+    schema = resolveSchema(context, openApiSchemaObj, {
+      resolveFor: PROCESSING_TYPE.VALIDATION,
+      isResponseSchema: parameterSourceOption === PARAMETER_SOURCE.RESPONSE
+    }),
     compositeSchema = schema.oneOf || schema.anyOf,
     compareTypes = _.get(context, 'concreteUtils.compareTypes') || concreteUtils.compareTypes;
 
@@ -1707,7 +1721,9 @@ function checkPathVariables (context, matchedPathData, transactionPathPrefix, sc
         };
 
         if (options.suggestAvailableFixes) {
-          const resolvedSchema = resolveSchema(context, pathVar.schema, 0, PROCESSING_TYPE.VALIDATION);
+          const resolvedSchema = resolveSchema(context, pathVar.schema, {
+            resolveFor: PROCESSING_TYPE.VALIDATION
+          });
 
           mismatchObj.suggestedFix = {
             key: pathVar.name,
@@ -1754,8 +1770,9 @@ function checkQueryParams (context, queryParams, transactionPathPrefix, schemaPa
   // below will make sure for exploded params actual schema of property present in collection is present
   _.forEach(schemaParams, (param) => {
     let pathPrefix = param.pathPrefix,
-      paramSchema = resolveSchema(context, _.cloneDeep(param.schema),
-        0, PROCESSING_TYPE.VALIDATION),
+      paramSchema = resolveSchema(context, _.cloneDeep(param.schema), {
+        resolveFor: PROCESSING_TYPE.VALIDATION
+      }),
       { style, explode } = getParamSerialisationInfo(param, PARAMETER_SOURCE.REQUEST, components, options),
       encodingObj = { [param.name]: { style, explode } },
       metaInfo = {
@@ -1858,7 +1875,9 @@ function checkQueryParams (context, queryParams, transactionPathPrefix, schemaPa
         };
 
         if (options.suggestAvailableFixes) {
-          const resolvedSchema = resolveSchema(context, qp.schema, 0, PROCESSING_TYPE.VALIDATION);
+          const resolvedSchema = resolveSchema(context, qp.schema, {
+            resolveFor: PROCESSING_TYPE.VALIDATION
+          });
 
           mismatchObj.suggestedFix = {
             key: qp.name,
@@ -1996,7 +2015,9 @@ function checkRequestHeaders (context, headers, transactionPathPrefix, schemaPat
         };
 
         if (options.suggestAvailableFixes) {
-          const resolvedSchema = resolveSchema(context, header.schema, 0, PROCESSING_TYPE.VALIDATION);
+          const resolvedSchema = resolveSchema(context, header.schema, {
+            resolveFor: PROCESSING_TYPE.VALIDATION
+          });
 
           mismatchObj.suggestedFix = {
             key: header.name,
@@ -2127,7 +2148,10 @@ function checkResponseHeaders (context, schemaResponse, headers, transactionPath
         };
 
         if (options.suggestAvailableFixes) {
-          const resolvedSchema = resolveSchema(context, header.schema, 0, PROCESSING_TYPE.VALIDATION);
+          const resolvedSchema = resolveSchema(context, header.schema, {
+            resolveFor: PROCESSING_TYPE.VALIDATION,
+            isResponseSchema: true
+          });
 
           mismatchObj.suggestedFix = {
             key: header.name,
@@ -2135,7 +2159,7 @@ function checkResponseHeaders (context, schemaResponse, headers, transactionPath
             suggestedValue: {
               key: header.name,
               value: safeSchemaFaker(context, resolvedSchema || {}, PROCESSING_TYPE.VALIDATION,
-                PARAMETER_SOURCE.REQUEST, components, SCHEMA_FORMATS.DEFAULT, schemaCache),
+                PARAMETER_SOURCE.RESPONSE, components, SCHEMA_FORMATS.DEFAULT, schemaCache),
               description: getParameterDescription(header)
             }
           };
@@ -2200,8 +2224,9 @@ function checkRequestBody (context, requestBody, transactionPathPrefix, schemaPa
         return param.value !== OAS_NOT_SUPPORTED;
       });
 
-    urlencodedBodySchema = resolveSchema(context, urlencodedBodySchema,
-      0, PROCESSING_TYPE.VALIDATION);
+    urlencodedBodySchema = resolveSchema(context, urlencodedBodySchema, {
+      resolveFor: PROCESSING_TYPE.VALIDATION
+    });
 
     resolvedSchemaParams = resolveFormParamSchema(urlencodedBodySchema, '', encodingObj,
       filteredUrlEncodedBody, {}, components, options);
@@ -2309,7 +2334,9 @@ function checkRequestBody (context, requestBody, transactionPathPrefix, schemaPa
           };
 
           if (options.suggestAvailableFixes) {
-            const resolvedSchema = resolveSchema(context, uParam.schema, 0, PROCESSING_TYPE.VALIDATION);
+            const resolvedSchema = resolveSchema(context, uParam.schema, {
+              resolveFor: PROCESSING_TYPE.VALIDATION
+            });
 
             mismatchObj.suggestedFix = {
               key: uParam.name,
@@ -2535,7 +2562,7 @@ module.exports = {
       queryParams = [...(requestUrl.query || [])];
 
       // SDK URL object. Get raw string representation.
-      requestUrl = (new sdk.Url(requestUrl)).toString();
+      requestUrl = (new Url(requestUrl)).toString();
     }
 
     // 1. Look at transaction.request.URL + method, and find matching request from schema
